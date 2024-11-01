@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản Lý Chi Tiêu</title>
+
+    <!-- CSS -->
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+        }
+        body {
+            background-color: #f4f4f9;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        header {
+            background: #4CAF50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        nav {
+            display: flex;
+            justify-content: space-around;
+            padding: 10px;
+            background-color: #eeeeee;
+        }
+        nav button {
+            padding: 10px 15px;
+            cursor: pointer;
+            border: none;
+            background-color: #4CAF50;
+            color: white;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        nav button:hover {
+            background-color: #45a049;
+        }
+        .section {
+            display: none;
+            padding: 20px;
+        }
+        .section.active {
+            display: block;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .summary {
+            margin: 20px 0;
+            display: flex;
+            gap: 20px;
+            font-size: 1.2em;
+        }
+        .alert {
+            color: red;
+            font-weight: bold;
+        }
+        .chart-container {
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-around;
+        }
+        canvas {
+            width: 100% !important;
+            max-width: 400px;
+        }
+    </style>
+
+    <!-- Thêm thư viện Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Quản Lý Chi Tiêu Hàng Tháng</h1>
+        </header>
+
+        <!-- Thanh điều hướng -->
+        <nav>
+            <button onclick="showSection('dashboard')">Trang tổng quan</button>
+            <button onclick="showSection('expenseTable')">Bảng chi tiêu</button>
+            <button onclick="showSection('addExpense')">Thêm chi tiêu</button>
+            <button onclick="showSection('charts')">Biểu đồ chi tiêu</button>
+        </nav>
+
+        <!-- Nội dung các phần -->
+        <main>
+            <!-- Trang tổng quan -->
+            <section id="dashboard" class="section active">
+                <h2>Trang Tổng Quan</h2>
+                <label for="incomeInput">Nhập Tổng Thu:</label>
+                <input type="number" id="incomeInput" placeholder="Nhập tổng thu" required>
+                <button onclick="updateIncome()">Cập nhật</button>
+                <div class="summary">
+                    <div>Tổng thu: <span id="totalIncome">0 VNĐ</span></div>
+                    <div>Tổng chi: <span id="totalExpense">0 VNĐ</span></div>
+                    <div>Tiết kiệm: <span id="savings">0 VNĐ</span></div>
+                    <div class="alert" id="alert" style="display:none;"></div>
+                </div>
+            </section>
+
+            <!-- Bảng chi tiêu -->
+            <section id="expenseTable" class="section">
+                <h2>Bảng Chi Tiêu</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Ngày</th>
+                            <th>Danh mục</th>
+                            <th>Số tiền</th>
+                            <th>Ghi chú</th>
+                        </tr>
+                    </thead>
+                    <tbody id="expenseList">
+                        <!-- Danh sách các chi tiêu sẽ hiển thị ở đây -->
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Thêm chi tiêu -->
+            <section id="addExpense" class="section">
+                <h2>Thêm Chi Tiêu</h2>
+                <form onsubmit="addExpense(event)">
+                    <label for="date">Ngày:</label>
+                    <input type="date" id="date" required>
+                    <label for="category">Danh mục:</label>
+                    <input type="text" id="category" placeholder="Danh mục" required>
+                    <label for="amount">Số tiền:</label>
+                    <input type="number" id="amount" placeholder="Số tiền" required>
+                    <label for="note">Ghi chú:</label>
+                    <input type="text" id="note" placeholder="Ghi chú">
+                    <button type="submit">Thêm</button>
+                </form>
+            </section>
+
+            <!-- Biểu đồ chi tiêu -->
+            <section id="charts" class="section">
+                <h2>Biểu Đồ Chi Tiêu</h2>
+                <div class="chart-container">
+                    <div>
+                        <h3>Biểu Đồ Chi Tiêu Hàng Ngày</h3>
+                        <canvas id="dailyExpenseChart"></canvas>
+                    </div>
+                    <div>
+                        <h3>Biểu Đồ Chi Tiêu Hàng Tháng</h3>
+                        <canvas id="monthlyExpenseChart"></canvas>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        let dailyExpenses = JSON.parse(localStorage.getItem('dailyExpenses')) || {};
+        let totalIncome = localStorage.getItem('totalIncome') || 0;
+
+        document.addEventListener("DOMContentLoaded", () => {
+            // Hiển thị dữ liệu đã tải
+            for (const [date, expense] of Object.entries(dailyExpenses)) {
+                const { category, amount, note } = expense;
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${date}</td><td style="background-color:${category.color};">${category.name}</td><td>${amount.toLocaleString()} VNĐ</td><td>${note}</td>`;
+                document.getElementById('expenseList').appendChild(row);
+            }
+            document.getElementById('totalIncome').textContent = `${totalIncome.toLocaleString()} VNĐ`;
+            updateSummary();
+            updateCharts();
+        });
+
+        // Hiển thị phần được chọn
+        function showSection(sectionId) {
+            document.querySelectorAll('.section').forEach(section => section.classList.remove('active'));
+            document.getElementById(sectionId).classList.add('active');
+        }
+
+        // Cập nhật tổng thu
+        function updateIncome() {
+            const incomeInput = document.getElementById('incomeInput').value;
+            totalIncome = parseFloat(incomeInput);
+            localStorage.setItem('totalIncome', totalIncome);
+            document.getElementById('totalIncome').textContent = `${totalIncome.toLocaleString()} VNĐ`;
+            updateSavings();
+        }
+
+        // Thêm chi tiêu vào bảng và cập nhật biểu đồ
+        function addExpense(event) {
+            event.preventDefault();
+            const date = document.getElementById('date').value;
+            const categoryName = document.getElementById('category').value;
+            const amount = parseFloat(document.getElementById('amount').value);
+            const note = document.getElementById('note').value;
+
+            // Màu sắc cho từng danh mục
+            const colors = {
+                'Ăn uống': '#FF6384',
+                'Giải trí': '#36A2EB',
+                'Mua sắm': '#FFCE56',
+                'Khác': '#FF5733'
+            };
+            const categoryColor = colors[categoryName] || '#cccccc';
+
+            // Lưu chi tiêu vào dailyExpenses
+            dailyExpenses[date] = {
+                category: { name: categoryName, color: categoryColor },
+                amount: amount,
+                note: note
+            };
+
+            // Cập nhật localStorage
+            localStorage.setItem('dailyExpenses', JSON.stringify(dailyExpenses));
+
+            // Thêm vào bảng chi tiêu
+            const row = document.createElement('tr');
+            row.innerHTML = `<td>${date}</td><td style="background-color:${categoryColor};">${categoryName}</td><td>${amount.toLocaleString()} VNĐ</td><td>${note}</td>`;
+            document.getElementById('expenseList').appendChild(row);
+
+            // Cập nhật tổng chi và biểu đồ
+            updateSummary();
+            updateCharts();
+
+            // Xóa dữ liệu nhập
+            document.getElementById('date').value = '';
+            document.getElementById('category').value = '';
+            document.getElementById('amount').value = '';
+            document.getElementById('note').value = '';
+        }
+
+        // Cập nhật tổng chi và tiết kiệm
+        function updateSummary() {
+            const totalExpense = Object.values(dailyExpenses).reduce((sum, expense) => sum + expense.amount, 0);
+            document.getElementById('totalExpense').textContent = `${totalExpense.toLocaleString()} VNĐ`;
+            const savings = totalIncome - totalExpense;
+            document.getElementById('savings').textContent = `${savings.toLocaleString()} VNĐ`;
+
+            // Cảnh báo khi chi tiêu gần hết tiền
+            const alert = document.getElementById('alert');
+            if (totalExpense >= totalIncome * 0.9) {
+                alert.textContent = 'Cảnh báo: Chi tiêu đã gần hết!';
+                alert.style.display = 'block';
+            } else {
+                alert.style.display = 'none';
+            }
+        }
+
+        // Cập nhật biểu đồ chi tiêu
+        function updateCharts() {
+            updateDailyExpenseChart();
+            updateMonthlyExpenseChart();
+        }
+
+        // Cập nhật biểu đồ chi tiêu hàng ngày
+        function updateDailyExpenseChart() {
+            const ctx = document.getElementById('dailyExpenseChart').getContext('2d');
+            const dailyData = {};
+            for (const [date, expense] of Object.entries(dailyExpenses)) {
+                const day = new Date(date).toLocaleDateString();
+                if (!dailyData[day]) dailyData[day] = 0;
+                dailyData[day] += expense.amount;
+            }
+
+            const labels = Object.keys(dailyData);
+            const data = Object.values(dailyData);
+
+            if (window.dailyChart) window.dailyChart.destroy(); // Xóa biểu đồ cũ nếu có
+
+            window.dailyChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Chi tiêu hàng ngày',
+                        data: data,
+                        backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Cập nhật biểu đồ chi tiêu hàng tháng
+        function updateMonthlyExpenseChart() {
+            const ctx = document.getElementById('monthlyExpenseChart').getContext('2d');
+            const monthlyData = {};
+            for (const [date, expense] of Object.entries(dailyExpenses)) {
+                const month = new Date(date).toLocaleString('default', { month: 'long', year: 'numeric' });
+                if (!monthlyData[month]) monthlyData[month] = 0;
+                monthlyData[month] += expense.amount;
+            }
+
+            const labels = Object.keys(monthlyData);
+            const data = Object.values(monthlyData);
+
+            if (window.monthlyChart) window.monthlyChart.destroy(); // Xóa biểu đồ cũ nếu có
+
+            window.monthlyChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Chi tiêu hàng tháng',
+                        data: data,
+                        backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
